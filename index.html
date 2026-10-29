@@ -41,7 +41,7 @@
     -webkit-user-select: none; user-select: none;
     -webkit-tap-highlight-color: transparent;
   }
-  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
   [hidden] { display: none !important; }
 
   .hud {
@@ -127,21 +127,89 @@
   .who b { font-weight: 800; font-size: 13px; line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .who small { font-size: 11px; color: var(--muted); line-height: 1; min-height: 11px; }
   .keys.compact { margin-bottom: 12px; font-size: 13px; line-height: 1.6; }
+  /* Roster slots: employees added by the player get a small delete button in the corner. */
+  .slot { position: relative; min-width: 0; display: flex; }
+  .slot .who { flex: 1; }
+  .del {
+    position: absolute; top: -6px; right: -6px; width: 24px; height: 24px; padding: 0;
+    border-radius: 50%; border: 1px solid var(--line); background: var(--raise);
+    color: var(--muted); font-size: 15px; line-height: 1; cursor: pointer;
+  }
+  .del:hover { color: var(--out); border-color: var(--out); }
+  /* In-page delete confirmation: native confirm() is blocked in some embedded browsers. */
+  .del-ask {
+    position: absolute; inset: 0; border-radius: 14px; border: 2px solid var(--out);
+    background: rgba(13, 17, 32, 0.94); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 6px; font-size: 12px; font-weight: 800;
+  }
+  .del-ask div { display: flex; gap: 4px; }
+  .del-ask button {
+    font: 700 12px var(--body); color: var(--text); background: var(--raise);
+    border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px; cursor: pointer;
+  }
+  .del-ask .yes { background: var(--out); border-color: var(--out); color: #fff; }
+  .who.add .face { display: grid; place-items: center; border: 2px dashed #4a5480; color: var(--amber); font: 34px var(--display); }
+  /* Add-employee editor: photo crop box with a circular window. */
+  .crop { width: 240px; max-width: 64vw; aspect-ratio: 1; margin: 0 auto 10px; border-radius: 16px; overflow: hidden; background: var(--ink); touch-action: none; cursor: grab; }
+  .crop.empty { cursor: default; }
+  .crop canvas { width: 100%; height: 100%; display: block; }
+  .zoom-row { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; color: var(--muted); font-size: 18px; }
+  .zoom-row input { flex: 1; accent-color: var(--amber); }
+  .crop-hint { margin: -4px 0 10px; font-size: 12px; color: var(--muted); }
+  .file-btn { display: block; margin: 0 0 12px !important; }
+  .field { display: block; text-align: left; font-size: 13px; color: var(--muted); margin: 0 0 12px; }
+  .field input {
+    display: block; width: 100%; margin-top: 4px; font: 600 16px var(--body); color: var(--text);
+    background: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+  }
+  .field input:focus { outline: 2px solid var(--amber); outline-offset: 1px; }
+  .seg { display: flex; gap: 6px; margin: 0 0 14px; }
+  .seg button { flex: 1; font: 700 14px var(--body); color: var(--text); background: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 9px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { border-color: var(--amber); background: #2a2a3a; }
+  #editor h1 { font-size: 28px; margin-bottom: 14px; }
   .hud-btns { display: flex; gap: 6px; }
+  /* Keycap look shared by the start screen and the in-game hint. */
+  .k, .hint kbd {
+    display: inline-grid; place-items: center; min-width: 34px; height: 34px; padding: 0 8px;
+    font: 800 16px var(--body); color: var(--text); border-radius: 8px;
+    background: linear-gradient(#2c3458, #1b2140); border: 1px solid #3d4878; border-bottom-width: 4px;
+    box-shadow: 0 2px 6px #0006;
+  }
+  .controls { display: flex; justify-content: center; align-items: flex-start; gap: clamp(14px, 5vw, 30px); margin: 6px 0 12px; }
+  .ctl { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .arrows { display: grid; grid-template-columns: repeat(3, 34px); grid-template-areas: ". up ." "lf dn rt"; gap: 4px; }
+  .arrows .up { grid-area: up; } .arrows .lf { grid-area: lf; } .arrows .dn { grid-area: dn; } .arrows .rt { grid-area: rt; }
+  .ctl .k.wide { min-width: 96px; margin-top: 38px; }
+  .ctl > .k:not(.wide) { margin-top: 38px; }
+  .ctl-label { font: 15px var(--display); color: var(--amber); }
+  .ctl-or { font-size: 11px; color: var(--muted); margin-top: -4px; letter-spacing: 0.5px; }
+  .phone { margin: 0 0 14px; font-size: 14px; font-weight: 600; color: var(--text); text-wrap: balance; }
+  .phone .on-touch { display: none; }
+  @media (hover: none) and (pointer: coarse) {
+    .controls, .phone .on-desk { display: none; }
+    .phone .on-touch { display: inline; }
+    .phone { font: 18px var(--display); color: var(--amber); margin: 6px 0 16px; }
+  }
+
   .hint {
     position: fixed; left: 50%; transform: translateX(-50%);
-    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-    background: rgba(13,17,32,0.78); border: 1px solid var(--line); border-radius: 999px;
-    padding: 6px 14px; font-size: 13px; color: #c9cfe6; white-space: nowrap; pointer-events: none;
-    transition: opacity 0.6s;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(13,17,32,0.88); border: 1px solid #3d4878; border-radius: 16px;
+    padding: 8px 16px; font-size: 15px; color: var(--text); white-space: nowrap; pointer-events: none;
+    box-shadow: 0 6px 20px #0008; transition: opacity 0.6s;
   }
-  .hint kbd, .fine kbd {
+  .hint .kb, .hint .touch { display: flex; align-items: center; gap: 4px; }
+  .hint kbd { min-width: 28px; height: 28px; font-size: 14px; padding: 0 6px; border-radius: 7px; border-bottom-width: 3px; }
+  .hint em { font-style: normal; font: 15px var(--display); color: var(--amber); margin: 0 4px 0 6px; }
+  .hint i { width: 1px; height: 22px; background: #3d4878; margin: 0 8px; }
+  .hint .touch { display: none; }
+  @media (hover: none) and (pointer: coarse) { .hint .kb { display: none; } .hint .touch { display: flex; } }
+  .hint.dim { opacity: 0.55; }
+  .fine kbd {
     font-family: var(--body); font-weight: 800; font-size: 11px; color: var(--text);
     background: var(--ink); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; margin: 0 1px;
   }
-  .hint .touch { display: none; }
-  @media (hover: none) and (pointer: coarse) { .hint .kb { display: none; } .hint .touch { display: inline; } }
-  .hint.dim { opacity: 0.6; }
   @media (max-width: 440px) {
     #start .card { padding-left: 10px; padding-right: 10px; }
     .roster { gap: 5px; }
@@ -168,8 +236,8 @@
 </div>
 
 <div class="hint" id="hint" hidden>
-  <span class="kb"><kbd>←</kbd><kbd>↑</kbd><kbd>→</kbd><kbd>↓</kbd> / <kbd>WASD</kbd> бегать · <kbd>Пробел</kbd> пауза</span>
-  <span class="touch">Зажми палец и тяни — джойстик · ⏸ пауза</span>
+  <span class="kb"><kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd><em>бегать</em><i></i><kbd class="w">Пробел</kbd><em>пауза</em><i></i><kbd>M</kbd><em>звук</em></span>
+  <span class="touch">👆 <em>Води пальцем по экрану</em><i></i>⏸ <em>пауза</em></span>
 </div>
 
 <div class="screen" id="pause" hidden>
@@ -192,11 +260,6 @@
     <p class="lead">Андрей открывает рот — жди кнута. Уворачивайся, пока не&nbsp;кончились&nbsp;жизни.</p>
     <p class="pick-title">Кто сегодня на смене?</p>
     <div class="roster" id="roster"></div>
-    <ul class="keys compact">
-      <li><kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd> или <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> — бегать</li>
-      <li><kbd>Пробел</kbd> — пауза · <kbd>M</kbd> — звук</li>
-      <li>На телефоне зажми палец где угодно и тяни в сторону — это джойстик. Пауза — кнопка ⏸</li>
-    </ul>
     <button class="btn" id="startBtn" disabled>Выбери игрока</button>
     <p class="fine">Со звуком веселее</p>
   </div>
@@ -214,6 +277,46 @@
     <p class="best" id="bestOver"></p>
     <button class="btn" id="againBtn">Ещё раз</button>
     <button class="btn ghost" id="changeBtn">Сменить игрока</button>
+  </div>
+</div>
+
+<div class="screen" id="howto" hidden>
+  <div class="card">
+    <h1>КАК ИГРАТЬ</h1>
+    <p class="lead">Андрей открывает рот и&nbsp;орёт — сейчас ударит кнутом. Уходи с&nbsp;красной полосы!</p>
+    <div class="controls" aria-label="Управление">
+      <div class="ctl">
+        <div class="arrows"><kbd class="k up">↑</kbd><kbd class="k lf">←</kbd><kbd class="k dn">↓</kbd><kbd class="k rt">→</kbd></div>
+        <span class="ctl-label">бегать</span>
+        <span class="ctl-or">или W A S D</span>
+      </div>
+      <div class="ctl"><kbd class="k wide">Пробел</kbd><span class="ctl-label">пауза</span><span class="ctl-or">&nbsp;</span></div>
+      <div class="ctl"><kbd class="k">M</kbd><span class="ctl-label">звук</span><span class="ctl-or">&nbsp;</span></div>
+    </div>
+    <p class="phone"><span class="on-desk">📱 На телефоне — води пальцем по&nbsp;экрану</span><span class="on-touch">👆 Води пальцем по&nbsp;экрану</span></p>
+    <button class="btn" id="goBtn">Понял, начинай уже!</button>
+    <button class="btn ghost" id="howBack">Назад</button>
+  </div>
+</div>
+
+<div class="screen" id="editor" hidden>
+  <div class="card">
+    <h1>НОВЫЙ СОТРУДНИК</h1>
+    <div class="crop empty" id="crop"><canvas id="cropCv"></canvas></div>
+    <div id="zoomRow" hidden>
+      <div class="zoom-row"><span>−</span><input type="range" id="zoom" min="1" max="4" step="0.01" value="1" aria-label="Масштаб"><span>+</span></div>
+      <p class="crop-hint">Двигай фото, чтобы лицо попало в круг</p>
+    </div>
+    <label class="btn ghost file-btn">📷&nbsp;<span id="fileLabel">Выбрать фото</span><input type="file" id="custFile" accept="image/*" hidden></label>
+    <label class="field">Имя<input id="custName" maxlength="14" autocomplete="off" placeholder="Например, Иван"></label>
+    <div class="field">Пол
+      <div class="seg" id="custGender" role="group" aria-label="Пол" style="margin-top:4px">
+        <button type="button" data-f="0" aria-pressed="true">♂ Мужской</button>
+        <button type="button" data-f="1" aria-pressed="false">♀ Женский</button>
+      </div>
+    </div>
+    <button class="btn" id="custSave" disabled>Сохранить</button>
+    <button class="btn ghost" id="custCancel">Отмена</button>
   </div>
 </div>
 
@@ -252,9 +355,17 @@
 
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
-    set(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) {} },
+    set(k, v) { try { localStorage.setItem(k, String(v)); return true; } catch (e) { return false; } },
+    del(k) { try { localStorage.removeItem(k); } catch (e) {} },
   };
-  let me = PLAYERS.find((p) => p.id === store.get('bossDodge.player')) || null;
+  // Employees added by the player: kept in this browser only, photo stored as a 256px JPEG data URL.
+  const CUSTOM_KEY = 'bossDodge.custom';
+  let customs = [];
+  try { customs = JSON.parse(store.get(CUSTOM_KEY) || '[]').filter((c) => c && c.id && c.name && c.src); } catch (e) {}
+  for (const c of customs) { c.custom = true; c.img = new Image(); c.img.src = c.src; }
+  const saveCustoms = () => store.set(CUSTOM_KEY, JSON.stringify(customs.map(({ id, name, src, f }) => ({ id, name, src, f }))));
+  const allPlayers = () => PLAYERS.concat(customs);
+  let me = allPlayers().find((p) => p.id === store.get('bossDodge.player')) || null;
   const readBest = (p = me) => +store.get('bossDodge.best.' + p.id) || 0;
   const writeBest = (v, p = me) => store.set('bossDodge.best.' + p.id, v);
 
@@ -497,14 +608,17 @@
   // ---------- Input ----------
   const keys = new Set();
   addEventListener('keydown', (e) => {
+    if (e.target.closest?.('input, textarea')) return; // typing a name must not start or mute the game
     const k = e.key.toLowerCase();
+    if (!$('editor').hidden) { if (k === 'escape') closeEditor(); return; }
     if (['arrowleft', 'arrowright', 'arrowup', 'arrowdown', ' '].includes(k)) e.preventDefault();
     keys.add(k); keys.add(e.code);
     if (e.repeat) return;
     if (k === ' ' && state === 'play') { pauseGame(); return; }
     if ((k === ' ' || k === 'escape') && state === 'paused') { resumeGame(); return; }
     if (k === 'escape' && state === 'play') { pauseGame(); return; }
-    if ((k === 'enter' || k === ' ') && (state === 'menu' || state === 'over') && !e.target.closest?.('button')) startGame();
+    if (!$('howto').hidden) { if (k === 'escape') hideHowto(); else if ((k === 'enter' || k === ' ') && !e.target.closest?.('button')) startGame(); return; }
+    if ((k === 'enter' || k === ' ') && !e.target.closest?.('button')) { if (state === 'menu') showHowto(); else if (state === 'over') startGame(); }
     // Physical key codes, so M and WASD work in any keyboard layout.
     if (e.code === 'KeyM') $('mute').click();
   });
@@ -521,7 +635,7 @@
     if (e.pointerType === 'mouse' || joy.id !== null) return;
     joy.id = e.pointerId;
     joy.ox = joy.x = e.clientX; joy.oy = joy.y = e.clientY;
-    cv.setPointerCapture(e.pointerId);
+    try { cv.setPointerCapture(e.pointerId); } catch (err) {}
   });
   cv.addEventListener('pointermove', (e) => {
     if (e.pointerId !== joy.id) return;
@@ -682,26 +796,198 @@
   function renderLives() {
     $('lives').innerHTML = [0, 1, 2].map((i) => `<span class="${i < lives ? '' : 'gone'}">♥</span>`).join('');
   }
+  const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   function renderRoster() {
-    $('roster').innerHTML = PLAYERS.map((p) => {
+    const tiles = allPlayers().map((p) => {
       const b = readBest(p);
-      return `<button class="who" data-id="${p.id}" aria-pressed="${p === me}">
+      const del = !p.custom ? '' : askDel === p.id
+        ? `<div class="del-ask"><span>Удалить?</span><div><button class="yes" data-yes="${p.id}">Да</button><button data-no>Нет</button></div></div>`
+        : `<button class="del" data-del="${p.id}" aria-label="Удалить ${esc(p.name)}">×</button>`;
+      return `<div class="slot"><button class="who" data-id="${p.id}" aria-pressed="${p === me}">
         <span class="face${p.zoom ? ' zoom' : ''}"><img src="${p.src}" alt=""></span>
-        <b>${p.name}</b><small>${b ? 'рекорд ' + b : ''}</small></button>`;
-    }).join('');
+        <b>${esc(p.name)}</b><small>${b ? 'рекорд ' + b : ''}</small></button>${del}</div>`;
+    });
+    tiles.push('<div class="slot"><button class="who add"><span class="face">+</span><b>Добавить</b><small>своего</small></button></div>');
+    $('roster').innerHTML = tiles.join('');
     const btn = $('startBtn');
     btn.disabled = !me;
     btn.textContent = me ? `Играть: ${me.name}` : 'Выбери игрока';
   }
+  let askDel = null; // id of the custom employee whose tile shows "Удалить? Да / Нет"
   $('roster').addEventListener('click', (e) => {
+    const del = e.target.closest('.del');
+    if (del) { askDel = del.dataset.del; renderRoster(); return; }
+    const yes = e.target.closest('[data-yes]');
+    if (yes) {
+      const c = customs.find((x) => x.id === yes.dataset.yes);
+      if (c) {
+        customs = customs.filter((x) => x !== c);
+        saveCustoms();
+        store.del('bossDodge.best.' + c.id);
+        if (me === c) { me = null; store.del('bossDodge.player'); }
+      }
+      askDel = null; renderRoster();
+      return;
+    }
+    if (e.target.closest('[data-no]') || askDel) { askDel = null; renderRoster(); if (e.target.closest('[data-no]')) return; }
+    if (e.target.closest('.add')) { openEditor(); return; }
     const b = e.target.closest('.who');
     if (!b) return;
-    me = PLAYERS.find((p) => p.id === b.dataset.id);
+    me = allPlayers().find((p) => p.id === b.dataset.id);
     store.set('bossDodge.player', me.id);
     renderRoster();
     $('startBtn').focus();
   });
   const renderBest = renderRoster;
+
+  // ---------- Add-employee editor ----------
+  // The crop box shows the photo under a circular window (80% of the box); drag to move,
+  // slider / wheel / pinch to zoom. Saving renders exactly what is inside the circle to 256×256.
+  const crop = { img: null, zoom: 1, ox: 0, oy: 0, f: false };
+  const cropCv = $('cropCv'), cctx = cropCv.getContext('2d');
+  const cropBox = () => cropCv.clientWidth || 240;
+  const coverScale = () => (cropBox() * 0.8) / Math.min(crop.img.naturalWidth, crop.img.naturalHeight);
+
+  function drawInitials(c, x, y, r, name) {
+    const g = c.createLinearGradient(0, y - r, 0, y + r);
+    g.addColorStop(0, '#fbdfa0'); g.addColorStop(1, '#f6c09a');
+    c.fillStyle = g;
+    c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+    const ini = name.trim().split(/\s+/).filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+    c.fillStyle = '#fff';
+    c.font = `800 ${r * 0.72}px Manrope, system-ui, sans-serif`;
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(ini, x, y + r * 0.04);
+  }
+  function clampCrop() {
+    if (!crop.img) return;
+    const s = coverScale() * crop.zoom, D = cropBox() * 0.8;
+    const mx = Math.max(0, (crop.img.naturalWidth * s - D) / 2), my = Math.max(0, (crop.img.naturalHeight * s - D) / 2);
+    crop.ox = clamp(crop.ox, -mx, mx); crop.oy = clamp(crop.oy, -my, my);
+  }
+  // Draws the photo (or initials) in crop-box coordinates; shared by the preview and the export.
+  function paintCrop(c) {
+    const S = cropBox(), mid = S / 2, D = S * 0.8;
+    c.fillStyle = '#0d1120'; c.fillRect(0, 0, S, S);
+    if (crop.img) {
+      const s = coverScale() * crop.zoom, w = crop.img.naturalWidth * s, h = crop.img.naturalHeight * s;
+      c.drawImage(crop.img, mid + crop.ox - w / 2, mid + crop.oy - h / 2, w, h);
+    } else {
+      drawInitials(c, mid, mid, D / 2, $('custName').value);
+    }
+  }
+  function drawCrop() {
+    const S = cropBox(), dpr = Math.min(window.devicePixelRatio || 1, 2), px = Math.round(S * dpr);
+    if (cropCv.width !== px) { cropCv.width = px; cropCv.height = px; }
+    cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    paintCrop(cctx);
+    const mid = S / 2, R = S * 0.4;
+    cctx.fillStyle = 'rgba(8,11,22,0.7)';
+    cctx.beginPath(); cctx.rect(0, 0, S, S); cctx.arc(mid, mid, R, 0, Math.PI * 2, true); cctx.fill();
+    cctx.strokeStyle = '#ffb547'; cctx.lineWidth = 3;
+    cctx.beginPath(); cctx.arc(mid, mid, R, 0, Math.PI * 2); cctx.stroke();
+  }
+  function setZoom(z) {
+    crop.zoom = clamp(z, 1, 4);
+    $('zoom').value = crop.zoom;
+    clampCrop(); drawCrop();
+  }
+  function validateEditor() { $('custSave').disabled = !$('custName').value.trim(); }
+
+  function openEditor() {
+    crop.img = null; crop.zoom = 1; crop.ox = crop.oy = 0; crop.f = false;
+    $('custName').value = ''; $('custFile').value = '';
+    $('fileLabel').textContent = 'Выбрать фото';
+    $('zoomRow').hidden = true; $('crop').classList.add('empty');
+    for (const b of $('custGender').children) b.setAttribute('aria-pressed', String(b.dataset.f === '0'));
+    $('start').hidden = true; $('editor').hidden = false;
+    validateEditor(); drawCrop();
+  }
+  function closeEditor() {
+    $('editor').hidden = true; $('start').hidden = false;
+    renderRoster();
+  }
+
+  $('custFile').addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const url = URL.createObjectURL(f);
+    const im = new Image();
+    im.onload = () => {
+      crop.img = im; crop.zoom = 1; crop.ox = crop.oy = 0;
+      $('zoom').value = 1;
+      $('zoomRow').hidden = false; $('crop').classList.remove('empty');
+      $('fileLabel').textContent = 'Другое фото';
+      drawCrop();
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); alert('Не получилось открыть это фото. Попробуй JPG или PNG.'); };
+    im.src = url;
+  });
+  $('custName').addEventListener('input', () => { validateEditor(); if (!crop.img) drawCrop(); });
+  $('custGender').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    crop.f = b.dataset.f === '1';
+    for (const x of $('custGender').children) x.setAttribute('aria-pressed', String(x === b));
+  });
+  $('zoom').addEventListener('input', (e) => setZoom(+e.target.value));
+  $('crop').addEventListener('wheel', (e) => {
+    if (!crop.img) return;
+    e.preventDefault();
+    setZoom(crop.zoom * Math.exp(-e.deltaY * 0.002));
+  }, { passive: false });
+  // Drag with one pointer, pinch with two.
+  const touches = new Map();
+  let pinch0 = null;
+  $('crop').addEventListener('pointerdown', (e) => {
+    if (!crop.img) return;
+    try { $('crop').setPointerCapture(e.pointerId); } catch (err) {}
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size === 2) {
+      const [a, b] = [...touches.values()];
+      pinch0 = { d: Math.hypot(a.x - b.x, a.y - b.y), z: crop.zoom };
+    }
+  });
+  $('crop').addEventListener('pointermove', (e) => {
+    const t = touches.get(e.pointerId);
+    if (!t) return;
+    const dx = e.clientX - t.x, dy = e.clientY - t.y;
+    t.x = e.clientX; t.y = e.clientY;
+    if (touches.size === 2 && pinch0) {
+      const [a, b] = [...touches.values()];
+      setZoom(pinch0.z * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, pinch0.d));
+    } else {
+      crop.ox += dx; crop.oy += dy;
+      clampCrop(); drawCrop();
+    }
+  });
+  const endCropDrag = (e) => { touches.delete(e.pointerId); if (touches.size < 2) pinch0 = null; };
+  $('crop').addEventListener('pointerup', endCropDrag);
+  $('crop').addEventListener('pointercancel', endCropDrag);
+
+  $('custCancel').addEventListener('click', closeEditor);
+  $('custSave').addEventListener('click', () => {
+    const name = $('custName').value.trim();
+    if (!name) return;
+    const S = cropBox(), D = S * 0.8, k = 256 / D;
+    const out = document.createElement('canvas');
+    out.width = out.height = 256;
+    const o = out.getContext('2d');
+    o.setTransform(k, 0, 0, k, -(S - D) / 2 * k, -(S - D) / 2 * k);
+    paintCrop(o);
+    const c = { id: 'c' + Date.now().toString(36), name, src: out.toDataURL('image/jpeg', 0.86), f: crop.f, custom: true };
+    c.img = new Image(); c.img.src = c.src;
+    customs.push(c);
+    if (!saveCustoms()) {
+      customs.pop();
+      alert('Не получилось сохранить: в браузере закончилось место для данных сайта.');
+      return;
+    }
+    me = c;
+    store.set('bossDodge.player', c.id);
+    closeEditor();
+    $('startBtn').focus();
+  });
 
   function startGame() {
     if (!me) return;
@@ -712,7 +998,7 @@
     player.x = W / 2; player.y = arena.y + arena.h * 0.78; player.vx = player.vy = 0; player.inv = 0;
     clampPlayer();
     state = 'play';
-    $('start').hidden = true; $('over').hidden = true; $('pause').hidden = true; $('hud').hidden = false;
+    $('start').hidden = true; $('howto').hidden = true; $('over').hidden = true; $('pause').hidden = true; $('hud').hidden = false;
     const hint = $('hint');
     hint.hidden = false; hint.classList.remove('dim');
     clearTimeout(hintTimer); hintTimer = setTimeout(() => hint.classList.add('dim'), 6000);
@@ -771,7 +1057,15 @@
     renderRoster();
   }
 
-  $('startBtn').addEventListener('click', startGame);
+  function showHowto() {
+    if (!me) return;
+    $('start').hidden = true; $('howto').hidden = false;
+    setTimeout(() => $('goBtn').focus(), 30);
+  }
+  function hideHowto() { $('howto').hidden = true; $('start').hidden = false; }
+  $('startBtn').addEventListener('click', showHowto);
+  $('goBtn').addEventListener('click', startGame);
+  $('howBack').addEventListener('click', hideHowto);
   $('againBtn').addEventListener('click', startGame);
   $('changeBtn').addEventListener('click', toMenu);
   $('pauseBtn').addEventListener('click', (e) => { e.currentTarget.blur(); pauseGame(); });
