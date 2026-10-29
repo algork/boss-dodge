@@ -1,0 +1,1155 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Работать!!!</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Manrope:wght@400;600;800&display=swap">
+<style>
+  /* Single full-screen canvas; HUD and screens are HTML overlays on top. Night office, amber accents. */
+  :root {
+    --ink: #0d1120;
+    --raise: #1d2340;
+    --line: #2c3456;
+    --text: #eef0f8;
+    --muted: #98a1c0;
+    --amber: #ffb547;
+    --amber-deep: #e08a12;
+    --out: #ff5a4f;
+    --display: "Russo One", "Arial Black", system-ui, sans-serif;
+    --body: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+    color-scheme: dark;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body {
+    background: var(--ink);
+    color: var(--text);
+    font-family: var(--body);
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  [hidden] { display: none !important; }
+
+  .hud {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left));
+    pointer-events: none;
+    font-family: var(--display);
+  }
+  .hud .col { display: flex; flex-direction: column; gap: 2px; }
+  .hud .col.right { align-items: flex-end; }
+  .lives { font-size: 22px; letter-spacing: 2px; color: var(--out); text-shadow: 0 2px 0 #0008; }
+  .lives .gone { color: #3a3f5c; }
+  .stat { font-size: 15px; color: var(--muted); }
+  .stat b { color: var(--text); font-weight: 400; font-size: 20px; }
+  .mute {
+    pointer-events: auto; margin-top: 6px;
+    background: var(--raise); color: var(--text); border: 1px solid var(--line);
+    border-radius: 10px; width: 40px; height: 36px; font-size: 18px; cursor: pointer;
+  }
+
+  .screen {
+    position: fixed; inset: 0; display: grid; place-items: center;
+    padding: 16px; background: rgba(9, 12, 24, 0.72); backdrop-filter: blur(3px);
+  }
+  .card {
+    width: min(420px, 100%);
+    background: var(--raise); border: 1px solid var(--line); border-radius: 20px;
+    padding: 26px 22px 22px; text-align: center;
+    box-shadow: 0 20px 60px #0009;
+  }
+  .avatar {
+    width: 112px; height: 112px; border-radius: 50%;
+    object-fit: cover; object-position: 49% 50%;
+    border: 3px solid var(--amber); display: block; margin: 0 auto 12px;
+  }
+  h1 {
+    font-family: var(--display); font-weight: 400; margin: 0 0 6px;
+    font-size: clamp(30px, 9vw, 44px); line-height: 1.05; color: var(--amber);
+    text-shadow: 0 3px 0 var(--amber-deep), 0 6px 18px #0008;
+  }
+  .lead { margin: 0 0 16px; color: var(--muted); font-size: 15px; line-height: 1.5; text-wrap: balance; }
+  .keys { margin: 0 0 18px; padding: 0; list-style: none; font-size: 14px; color: var(--text); line-height: 1.7; }
+  .keys kbd {
+    font-family: var(--body); font-weight: 800; font-size: 12px;
+    background: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px;
+  }
+  .result { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 16px; }
+  .result div { background: var(--ink); border: 1px solid var(--line); border-radius: 14px; padding: 10px 6px; }
+  .result span { display: block; font-size: 12px; color: var(--muted); }
+  .result b { font-family: var(--display); font-weight: 400; font-size: 28px; }
+  .best { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+  .best.new { color: var(--amber); font-weight: 800; }
+  .btn {
+    font-family: var(--display); font-size: 20px; color: #2a1600;
+    background: linear-gradient(var(--amber), var(--amber-deep));
+    border: 0; border-radius: 14px; padding: 14px 34px; cursor: pointer;
+    box-shadow: 0 4px 0 #8a4f00; width: 100%;
+  }
+  .btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #8a4f00; }
+  .fine { margin: 12px 0 0; font-size: 12px; color: var(--muted); }
+  .btn:disabled { filter: grayscale(1); opacity: 0.55; cursor: default; transform: none; }
+  .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); box-shadow: none; margin-top: 10px; font-size: 16px; padding: 11px; }
+
+  /* Player picker: 4 avatars per row on every width, so all 12 fit without scrolling on desktop. */
+  .screen { overflow-y: auto; }
+  #start .card { width: min(560px, 100%); margin: auto; padding-top: 20px; }
+  .boss-row { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 8px; }
+  .boss-row .avatar { width: 72px; height: 72px; margin: 0; }
+  .boss-row h1 { margin: 0; }
+  .pick-title { font-family: var(--display); font-size: 16px; margin: 4px 0 10px; color: var(--text); }
+  .roster { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 0 14px; }
+  .who {
+    background: var(--ink); border: 2px solid var(--line); border-radius: 14px;
+    padding: 8px 4px 6px; cursor: pointer; color: var(--text); font: inherit;
+    display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0;
+  }
+  .who:hover { border-color: #4a5480; }
+  .who[aria-pressed="true"] { border-color: var(--amber); background: #2a2a3a; box-shadow: 0 0 0 3px #ffb54733; }
+  .face { width: min(72px, 17vw); aspect-ratio: 1; border-radius: 50%; overflow: hidden; display: block; }
+  .face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .face.zoom img { transform: scale(1.18); }
+  .who b { font-weight: 800; font-size: 13px; line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .who small { font-size: 11px; color: var(--muted); line-height: 1; min-height: 11px; }
+  .keys.compact { margin-bottom: 12px; font-size: 13px; line-height: 1.6; }
+  .hud-btns { display: flex; gap: 6px; }
+  .hint {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    background: rgba(13,17,32,0.78); border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 14px; font-size: 13px; color: #c9cfe6; white-space: nowrap; pointer-events: none;
+    transition: opacity 0.6s;
+  }
+  .hint kbd, .fine kbd {
+    font-family: var(--body); font-weight: 800; font-size: 11px; color: var(--text);
+    background: var(--ink); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; margin: 0 1px;
+  }
+  .hint .touch { display: none; }
+  @media (hover: none) and (pointer: coarse) { .hint .kb { display: none; } .hint .touch { display: inline; } }
+  .hint.dim { opacity: 0.6; }
+  @media (max-width: 440px) {
+    #start .card { padding-left: 10px; padding-right: 10px; }
+    .roster { gap: 5px; }
+    .who { padding: 6px 2px 5px; }
+    .who b { font-size: 11.5px; letter-spacing: -0.2px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="hud" id="hud" hidden>
+  <div class="col">
+    <div class="lives" id="lives"></div>
+    <div class="stat">Время <b id="time">0.0</b></div>
+  </div>
+  <div class="col right">
+    <div class="stat">Увернулся <b id="score">0</b></div>
+    <div class="hud-btns">
+      <button class="mute" id="pauseBtn" aria-label="Пауза">⏸</button>
+      <button class="mute" id="mute" aria-label="Звук">🔊</button>
+    </div>
+  </div>
+</div>
+
+<div class="hint" id="hint" hidden>
+  <span class="kb"><kbd>←</kbd><kbd>↑</kbd><kbd>→</kbd><kbd>↓</kbd> / <kbd>WASD</kbd> бегать · <kbd>Пробел</kbd> пауза</span>
+  <span class="touch">Води пальцем по экрану · ⏸ пауза</span>
+</div>
+
+<div class="screen" id="pause" hidden>
+  <div class="card">
+    <h1>ПАУЗА</h1>
+    <p class="lead">Андрей ждёт. Недолго.</p>
+    <button class="btn" id="resumeBtn">Продолжить</button>
+    <button class="btn ghost" id="restartBtn">Начать заново</button>
+    <button class="btn ghost" id="pauseChangeBtn">Сменить игрока</button>
+    <p class="fine"><kbd>Пробел</kbd> — продолжить</p>
+  </div>
+</div>
+
+<div class="screen" id="start">
+  <div class="card">
+    <div class="boss-row">
+      <img class="avatar" src="boss.png" alt="">
+      <h1>РАБОТАТЬ!!!</h1>
+    </div>
+    <p class="lead">Андрей открывает рот — жди кнута. Уворачивайся, пока не&nbsp;кончились&nbsp;жизни.</p>
+    <p class="pick-title">Кто сегодня на смене?</p>
+    <div class="roster" id="roster"></div>
+    <ul class="keys compact">
+      <li><kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd> или <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> — бегать</li>
+      <li><kbd>Пробел</kbd> — пауза · <kbd>M</kbd> — звук</li>
+      <li>На телефоне води пальцем, пауза — кнопка ⏸</li>
+    </ul>
+    <button class="btn" id="startBtn" disabled>Выбери игрока</button>
+    <p class="fine">Со звуком веселее</p>
+  </div>
+</div>
+
+<div class="screen" id="over" hidden>
+  <div class="card">
+    <span class="face" id="overFace" style="width:84px;margin:0 auto 10px;border:3px solid var(--out)"><img alt=""></span>
+    <h1 id="overTitle">УВОЛЕН!</h1>
+    <p class="lead" id="overLine"></p>
+    <div class="result">
+      <div><span>Увернулся</span><b id="rDodges">0</b></div>
+      <div><span>Продержался</span><b id="rTime">0</b></div>
+    </div>
+    <p class="best" id="bestOver"></p>
+    <button class="btn" id="againBtn">Ещё раз</button>
+    <button class="btn ghost" id="changeBtn">Сменить игрока</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- Setup ----------
+  const cv = document.getElementById('c');
+  const ctx = cv.getContext('2d');
+  const $ = (id) => document.getElementById(id);
+
+  const img = new Image();
+  let imgOk = false;
+  img.onload = () => { imgOk = true; };
+  img.src = 'boss.png';
+  // The avatar circle inside boss.png (282×272): center and radius in source pixels.
+  const SRC = { x: 138.5, y: 137.5, r: 114 };
+
+  // Roster: files in players/. zoom crops the letter avatars, whose PNGs have a margin around the circle.
+  const PLAYERS = [
+    { id: 'p1', name: 'Антон', src: 'players/p1.png', zoom: 1.18 },
+    { id: 'p2', name: 'Дмитрий', src: 'players/p2.png', zoom: 1.18 },
+    { id: 'p3', name: 'Виктор', src: 'players/p3.png', zoom: 1.18 },
+    { id: 'p4', name: 'Александр', src: 'players/p4.jpg' },
+    { id: 'p5', name: 'Сергей', src: 'players/p5.jpg' },
+    { id: 'p6', name: 'Данил', src: 'players/p6.jpg' },
+    { id: 'p7', name: 'Денис', src: 'players/p7.jpg' },
+    { id: 'p8', name: 'Алексей', src: 'players/p8.jpg' },
+    { id: 'p9', name: 'Эльвира', src: 'players/p9.jpg', f: true },
+    { id: 'p10', name: 'Евгений', src: 'players/p10.jpg' },
+    { id: 'p11', name: 'Николай', src: 'players/p11.jpg' },
+    { id: 'p12', name: 'Наила', src: 'players/p12.jpg', f: true },
+  ];
+  for (const p of PLAYERS) { p.img = new Image(); p.img.src = p.src; }
+
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) {} },
+  };
+  let me = PLAYERS.find((p) => p.id === store.get('bossDodge.player')) || null;
+  const readBest = (p = me) => +store.get('bossDodge.best.' + p.id) || 0;
+  const writeBest = (v, p = me) => store.set('bossDodge.best.' + p.id, v);
+
+  let W = 0, H = 0, DPR = 1, U = 1;
+  const boss = { x: 0, y: 0, r: 50 };
+  const player = { x: 0, y: 0, r: 14, vx: 0, vy: 0, inv: 0 };
+  // The playfield is capped on big screens so there is nowhere to hide; on phones it is the whole screen.
+  const arena = { x: 0, y: 0, w: 0, h: 0 };
+  let zoneW = 30, speed = 300;
+
+  function layout() {
+    W = innerWidth; H = innerHeight;
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    arena.w = Math.max(120, Math.min(W - 16, 520));
+    arena.h = Math.max(160, Math.min(H - 16, 640));
+    arena.x = (W - arena.w) / 2;
+    arena.y = (H - arena.h) / 2;
+    const m = Math.min(arena.w, arena.h);
+    U = m / 400;
+    boss.r = clamp(m * 0.11, 38, 70);
+    boss.x = W / 2;
+    boss.y = Math.max(arena.y, 40) + boss.r * 1.75;
+    player.r = clamp(m * 0.042, 15, 22);
+    zoneW = clamp(m * 0.08, 30, 46);
+    speed = Math.max(250, m * 0.68);
+    clampPlayer();
+  }
+
+  // ---------- Helpers ----------
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+  const rand = (a, b) => a + Math.random() * (b - a);
+  function lerpAngle(a, b, t) {
+    let d = ((b - a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    return a + d * t;
+  }
+  function distToSeg(px, py, ax, ay, bx, by) {
+    const dx = bx - ax, dy = by - ay;
+    const t = clamp(((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy), 0, 1);
+    return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
+  }
+
+  // ---------- Audio ----------
+  // One master level for every sound in the game; laptops at full volume made 0.8 too loud.
+  const MASTER_VOLUME = 0.25;
+  let actx = null, master = null, muted = false;
+  let voiceRaw = null, voiceClip = null, pendingShout = false, ruVoice = null, lastShout = -9;
+  let voiceState = 'loading'; // loading | ready | none (no clip: fall back to speech synthesis)
+
+  // Andrey's shout: sounds/shout.m4a, already trimmed and sped up (pitch kept) offline.
+  // A recorded clip beats speech synthesis, whose voice depends on the player's device.
+  const SHOUT_FILE = 'sounds/shout.m4a';
+  const fetchAudio = (f) => fetch(f).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
+  fetchAudio(SHOUT_FILE).then((raw) => {
+    voiceRaw = raw;
+    if (!raw) voiceState = 'none';
+    decodeVoice();
+  });
+  function decodeVoice() {
+    if (!actx || !voiceRaw || voiceClip) return;
+    const raw = voiceRaw;
+    voiceRaw = null;
+    actx.decodeAudioData(raw, (buf) => {
+      voiceClip = buf;
+      voiceState = 'ready';
+      if (pendingShout) { pendingShout = false; playVoice(); }
+    }, () => { voiceState = 'none'; });
+  }
+  function playVoice() {
+    const src = actx.createBufferSource();
+    src.buffer = voiceClip;
+    const g = actx.createGain(); g.gain.value = 0.6;
+    src.connect(g).connect(master);
+    src.start();
+  }
+
+  function pickVoice() {
+    if (!('speechSynthesis' in window)) return;
+    const vs = speechSynthesis.getVoices();
+    ruVoice = vs.find((v) => /^ru/i.test(v.lang) && /male|yuri|мужск/i.test(v.name))
+      || vs.find((v) => /^ru/i.test(v.lang)) || null;
+  }
+  if ('speechSynthesis' in window) {
+    pickVoice();
+    speechSynthesis.addEventListener?.('voiceschanged', pickVoice);
+  }
+
+  function initAudio() {
+    if (actx) { actx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    actx = new AC();
+    master = actx.createGain();
+    master.gain.value = muted ? 0 : MASTER_VOLUME;
+    master.connect(actx.destination);
+    decodeVoice();
+    decodeMusic();
+    decodeWhips();
+  }
+
+  function tone(type, f0, f1, dur, peak) {
+    if (!actx) return;
+    const t = actx.currentTime;
+    const o = actx.createOscillator(); o.type = type;
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    const g = actx.createGain();
+    g.gain.setValueAtTime(peak, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(master);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  const sfx = {
+    hurt: () => tone('square', 320, 70, 0.3, 0.25),
+    dodge: () => tone('sine', 660, 990, 0.08, 0.08),
+    over: () => { tone('sawtooth', 300, 60, 0.9, 0.25); },
+  };
+
+  // Whip cracks: a random clip per lash. `hit` is where the crack sits inside the file, so playback
+  // starts that far before the lash lands; each clip is normalised to the same peak loudness.
+  const WHIPS = [
+    { file: 'sounds/whip-1.mp3', hit: 0.24 },
+    { file: 'sounds/whip-2.mp3', hit: 0.04 },
+    { file: 'sounds/whip-3.mp3', hit: 0.40 },
+  ];
+  let lastWhip = -1;
+  for (const w of WHIPS) fetchAudio(w.file).then((raw) => { w.raw = raw; decodeWhips(); });
+  function decodeWhips() {
+    if (!actx) return;
+    for (const w of WHIPS) {
+      if (!w.raw) continue;
+      const raw = w.raw; w.raw = null;
+      actx.decodeAudioData(raw, (b) => {
+        let peak = 0;
+        for (let c = 0; c < b.numberOfChannels; c++) {
+          const d = b.getChannelData(c);
+          for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
+        }
+        w.buf = b; w.gain = peak > 0 ? 0.45 / peak : 0.5;
+      }, () => {});
+    }
+  }
+  // Called when the lash starts swinging; `lead` is the time until it cracks.
+  function playWhip(lead) {
+    const ready = WHIPS.map((w, i) => i).filter((i) => WHIPS[i].buf);
+    if (!actx || !ready.length) return;
+    let k = ready[Math.floor(Math.random() * ready.length)];
+    if (ready.length > 1 && k === lastWhip) k = ready[(ready.indexOf(k) + 1) % ready.length];
+    lastWhip = k;
+    const w = WHIPS[k];
+    const src = actx.createBufferSource(); src.buffer = w.buf;
+    const g = actx.createGain(); g.gain.value = w.gain;
+    src.connect(g).connect(master);
+    const skip = w.hit - lead;
+    if (skip >= 0) src.start(0, skip);
+    else src.start(actx.currentTime - skip);
+  }
+
+  function shout() {
+    if (muted || time - lastShout < 0.8) return;
+    lastShout = time;
+    if (voiceClip && actx) { playVoice(); return; }
+    if (voiceState === 'loading') { pendingShout = true; return; } // still decoding: play once ready
+    if (!('speechSynthesis' in window)) return;
+    try {
+      speechSynthesis.cancel();
+      if (!ruVoice) pickVoice(); // the voice list is often still empty at page load
+      const u = new SpeechSynthesisUtterance('Работать!');
+      u.lang = 'ru-RU';
+      if (ruVoice) u.voice = ruVoice;
+      u.rate = 1.15; u.pitch = 0.4; u.volume = 1;
+      speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+
+  $('mute').addEventListener('click', (e) => {
+    muted = !muted;
+    e.currentTarget.textContent = muted ? '🔇' : '🔊';
+    if (master) master.gain.value = muted ? 0 : MASTER_VOLUME;
+    if (muted && 'speechSynthesis' in window) speechSynthesis.cancel();
+    e.currentTarget.blur();
+  });
+
+  // ---------- Music ----------
+  // Quiet looped background track from sounds/music.mp3, routed through master so mute covers it.
+  const MUSIC_FILE = 'sounds/music.mp3', MUSIC_VOLUME = 0.14;
+  let musicRaw = null, musicBuf = null, musicSrc = null, musicGain = null;
+  let musicWanted = false, musicAt = 0, musicFrom = 0; // where to resume after a pause
+  fetchAudio(MUSIC_FILE).then((raw) => { musicRaw = raw; decodeMusic(); });
+  function decodeMusic() {
+    if (!actx || !musicRaw || musicBuf) return;
+    const raw = musicRaw;
+    musicRaw = null;
+    actx.decodeAudioData(raw, (b) => { musicBuf = b; if (musicWanted) music(true); }, () => {});
+  }
+  // Must be called from a click/key handler the first time, or mobile browsers block playback.
+  function music(on) {
+    musicWanted = on;
+    if (!actx || !musicBuf) return;
+    if (on && !musicSrc) {
+      if (!musicGain) { musicGain = actx.createGain(); musicGain.gain.value = MUSIC_VOLUME; musicGain.connect(master); }
+      musicSrc = actx.createBufferSource();
+      musicSrc.buffer = musicBuf; musicSrc.loop = true;
+      musicSrc.connect(musicGain);
+      musicSrc.start(0, musicFrom % musicBuf.duration);
+      musicAt = actx.currentTime - musicFrom;
+    } else if (!on && musicSrc) {
+      musicFrom = (actx.currentTime - musicAt) % musicBuf.duration;
+      musicSrc.stop(); musicSrc.disconnect(); musicSrc = null;
+    }
+  }
+
+  // ---------- Input ----------
+  const keys = new Set();
+  addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (['arrowleft', 'arrowright', 'arrowup', 'arrowdown', ' '].includes(k)) e.preventDefault();
+    keys.add(k); keys.add(e.code);
+    if (e.repeat) return;
+    if (k === ' ' && state === 'play') { pauseGame(); return; }
+    if ((k === ' ' || k === 'escape') && state === 'paused') { resumeGame(); return; }
+    if (k === 'escape' && state === 'play') { pauseGame(); return; }
+    if ((k === 'enter' || k === ' ') && (state === 'menu' || state === 'over') && !e.target.closest?.('button')) startGame();
+    // Physical key codes, so M and WASD work in any keyboard layout.
+    if (e.code === 'KeyM') $('mute').click();
+  });
+  addEventListener('keyup', (e) => { keys.delete(e.key.toLowerCase()); keys.delete(e.code); });
+  addEventListener('blur', () => { keys.clear(); if (state === 'play') pauseGame(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') pauseGame(); });
+
+  // Relative drag: the finger never covers the player.
+  let drag = null;
+  cv.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, id: e.pointerId }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id || state !== 'play') return;
+    player.x += (e.clientX - drag.x) * 1.4;
+    player.y += (e.clientY - drag.y) * 1.4;
+    drag.x = e.clientX; drag.y = e.clientY;
+    clampPlayer();
+  });
+  const endDrag = () => { drag = null; };
+  cv.addEventListener('pointerup', endDrag);
+  cv.addEventListener('pointercancel', endDrag);
+
+  function clampPlayer() {
+    const r = player.r;
+    player.x = clamp(player.x, arena.x + r + 4, arena.x + arena.w - r - 4);
+    player.y = clamp(player.y, arena.y + r + 4, arena.y + arena.h - r - 4);
+    const dx = player.x - boss.x, dy = player.y - boss.y;
+    const d = Math.hypot(dx, dy), min = boss.r * 1.15 + r;
+    if (d < min) {
+      const a = d > 0.01 ? Math.atan2(dy, dx) : Math.PI / 2;
+      player.x = boss.x + Math.cos(a) * min;
+      player.y = boss.y + Math.sin(a) * min;
+    }
+  }
+
+  // ---------- Game state ----------
+  let state = 'menu';     // menu | play | paused | dying | over
+  let time = 0;           // real time, drives idle animation
+  let gt = 0;             // game time since start
+  let lives = 3, dodges = 0;
+  let attack = null, idleTimer = 0, dyingT = 0;
+  let shake = 0, redFlash = 0;
+  let particles = [], floaters = [];
+
+  const STRIKE = 0.14, RECOVER = 0.38, SPACING = 0.27;
+
+  function fist() { return { x: boss.x + boss.r * 0.8, y: boss.y + boss.r * 0.75 }; }
+  const handleLen = () => boss.r * 0.5;
+  function lashOrigin(ang) {
+    const f = fist();
+    return { x: f.x + Math.cos(ang) * handleLen(), y: f.y + Math.sin(ang) * handleLen() };
+  }
+  const lashLen = () => Math.hypot(arena.w, arena.h) * 1.05;
+
+  // Difficulty ramps with survival time.
+  const teleDur = () => Math.max(0.6, 1.05 - gt * 0.007);
+  const gapDur = () => Math.max(0.3, rand(1.1, 1.7) - gt * 0.022);
+  // Grows and never drops back: between steps the next count is mixed in with rising probability.
+  // One more lash every 20 s: 2 by 20 s, 3 by 40 s, … 6 (hardcore) from 100 s.
+  const MAX_LASHES = 6;
+  function lashCount() {
+    const level = Math.min(MAX_LASHES, 1 + gt / 20);
+    const n = Math.floor(level);
+    return Math.min(MAX_LASHES, n + (Math.random() < level - n ? 1 : 0));
+  }
+
+  // Angle from the whip to where the player is (later on, slightly ahead of where they are heading).
+  function aimAngle() {
+    const f = fist();
+    const lead = gt > 40 ? 0.3 : 0;
+    return Math.atan2(player.y + player.vy * lead - f.y, player.x + player.vx * lead - f.x);
+  }
+  // Lashes follow the player through the telegraph and lock this long before the crack.
+  const lockLead = () => Math.max(0.32, 0.45 - gt * 0.002);
+
+  function startAttack() {
+    const n = lashCount();
+    const spread = clamp(0.42 - gt * 0.002, 0.3, 0.42);
+    // One lash always goes straight at the player; the rest flank it, so standing still never works.
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const offs = [0, side * spread, -side * spread, side * spread * 2, -side * spread * 2, side * spread * 3].slice(0, n);
+    offs.sort(() => Math.random() - 0.5);
+    const tele = teleDur();
+    const lashes = offs.map((o, k) => ({ off: o + rand(-0.04, 0.04), ang: aimAngle() + o, locked: false, strikeAt: gt + tele + k * SPACING, started: false, struck: false, flash: 0 }));
+    attack = { start: gt, tele, lashes, endAt: lashes[lashes.length - 1].strikeAt + STRIKE + RECOVER };
+    shout();
+  }
+
+  function updateAttack() {
+    if (!attack) {
+      idleTimer -= gdt;
+      if (idleTimer <= 0 && state === 'play') startAttack();
+      return;
+    }
+    const aim = aimAngle();
+    for (const l of attack.lashes) {
+      if (!l.locked) {
+        if (gt >= l.strikeAt - lockLead()) l.locked = true;
+        else l.ang = lerpAngle(l.ang, aim + l.off, Math.min(1, gdt * 12));
+      }
+      if (!l.started && gt >= l.strikeAt) { l.started = true; playWhip(STRIKE); }
+      if (!l.struck && gt >= l.strikeAt + STRIKE) { l.struck = true; crack(l); }
+      l.flash = Math.max(0, l.flash - gdt * 3.5);
+    }
+    if (gt >= attack.endAt) { attack = null; idleTimer = gapDur(); }
+  }
+
+  function crack(l) {
+    l.flash = 1;
+    shake = Math.max(shake, 10);
+    const o = lashOrigin(l.ang), L = lashLen();
+    const ex = o.x + Math.cos(l.ang) * L, ey = o.y + Math.sin(l.ang) * L;
+    // Dust along the lash, sparks where it lands nearest the player.
+    for (let i = 0; i < 26; i++) {
+      const t = Math.random();
+      const x = lerp(o.x, ex, t), y = lerp(o.y, ey, t);
+      if (x < 0 || y < 0 || x > W || y > H) continue;
+      spawn(x, y, rand(-40, 40), rand(-40, 40), rand(0.4, 0.8), '#c9b9a0', rand(3, 7) * U, 'dust');
+    }
+    const dx = Math.cos(l.ang), dy = Math.sin(l.ang);
+    const tp = clamp((player.x - o.x) * dx + (player.y - o.y) * dy, 0, L);
+    const sx = o.x + dx * tp, sy = o.y + dy * tp;
+    for (let i = 0; i < 16; i++) {
+      const a = rand(0, Math.PI * 2), s = rand(120, 380) * U;
+      spawn(sx, sy, Math.cos(a) * s, Math.sin(a) * s, rand(0.25, 0.5), i % 3 ? '#ffd27a' : '#fff', rand(2, 3.5) * U, 'spark');
+    }
+
+    if (state !== 'play') return;
+    const d = distToSeg(player.x, player.y, o.x, o.y, ex, ey);
+    if (d < zoneW / 2 + player.r * 0.7 && player.inv <= 0) {
+      hurt();
+    } else if (player.inv <= 0 || d >= zoneW / 2 + player.r * 0.7) {
+      dodges++;
+      sfx.dodge();
+      if (d < zoneW / 2 + player.r * 2.5) floater(player.x, player.y - player.r - 8, pick(['Мимо!', 'Фух!', 'Не сегодня', 'Ха!']), '#9ef0b0');
+    }
+  }
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+
+  function hurt() {
+    lives--;
+    player.inv = 1.4;
+    shake = 20; redFlash = 1;
+    sfx.hurt();
+    floater(player.x, player.y - player.r - 10, pick(['Ай!', 'Уже работаю!', 'За что?!', 'Ой!']), '#ff8a80');
+    for (let i = 0; i < 22; i++) {
+      const a = rand(0, Math.PI * 2), s = rand(80, 260) * U;
+      spawn(player.x, player.y, Math.cos(a) * s, Math.sin(a) * s, rand(0.4, 0.8), i % 2 ? '#ff5a4f' : '#6fd3ff', rand(2.5, 4.5) * U, 'spark');
+    }
+    renderLives();
+    if (lives <= 0) {
+      state = 'dying'; dyingT = 1.2;
+      sfx.over();
+    }
+  }
+
+  function spawn(x, y, vx, vy, life, color, size, kind) {
+    particles.push({ x, y, vx, vy, life, max: life, color, size, kind });
+  }
+  function floater(x, y, text, color) { floaters.push({ x, y, text, color, life: 0.9 }); }
+
+  // ---------- Screens ----------
+  function renderLives() {
+    $('lives').innerHTML = [0, 1, 2].map((i) => `<span class="${i < lives ? '' : 'gone'}">♥</span>`).join('');
+  }
+  function renderRoster() {
+    $('roster').innerHTML = PLAYERS.map((p) => {
+      const b = readBest(p);
+      return `<button class="who" data-id="${p.id}" aria-pressed="${p === me}">
+        <span class="face${p.zoom ? ' zoom' : ''}"><img src="${p.src}" alt=""></span>
+        <b>${p.name}</b><small>${b ? 'рекорд ' + b : ''}</small></button>`;
+    }).join('');
+    const btn = $('startBtn');
+    btn.disabled = !me;
+    btn.textContent = me ? `Играть: ${me.name}` : 'Выбери игрока';
+  }
+  $('roster').addEventListener('click', (e) => {
+    const b = e.target.closest('.who');
+    if (!b) return;
+    me = PLAYERS.find((p) => p.id === b.dataset.id);
+    store.set('bossDodge.player', me.id);
+    renderRoster();
+    $('startBtn').focus();
+  });
+  const renderBest = renderRoster;
+
+  function startGame() {
+    if (!me) return;
+    initAudio();
+    lives = 3; dodges = 0; gt = 0;
+    attack = null; idleTimer = 1.2;
+    particles = []; floaters = [];
+    player.x = W / 2; player.y = arena.y + arena.h * 0.78; player.vx = player.vy = 0; player.inv = 0;
+    clampPlayer();
+    state = 'play';
+    $('start').hidden = true; $('over').hidden = true; $('pause').hidden = true; $('hud').hidden = false;
+    const hint = $('hint');
+    hint.hidden = false; hint.classList.remove('dim');
+    clearTimeout(hintTimer); hintTimer = setTimeout(() => hint.classList.add('dim'), 6000);
+    renderLives();
+    lastShout = -9;
+    shout(); // speaking inside the click also unlocks speech on iOS
+    music(true);
+    mouthBlurt = 0.7;
+  }
+
+  function gameOver() {
+    state = 'over';
+    const best = readBest();
+    const isNew = dodges > best;
+    if (isNew) writeBest(dodges);
+    $('rDodges').textContent = dodges;
+    $('rTime').textContent = gt.toFixed(1) + ' с';
+    $('overTitle').textContent = `${me.name} ${me.f ? 'уволена' : 'уволен'}!`.toUpperCase();
+    const of = $('overFace');
+    of.className = 'face' + (me.zoom ? ' zoom' : '');
+    of.querySelector('img').src = me.src;
+    $('overLine').textContent = dodges >= 60 ? 'Ладно, премию выпишу. Может быть.' : dodges >= 25 ? 'Неплохо, но обед отменяется.' : 'Андрей доволен. Ты — нет.';
+    const bo = $('bestOver');
+    bo.textContent = isNew ? '🏆 Новый рекорд!' : `Рекорд: ${best}`;
+    bo.className = 'best' + (isNew ? ' new' : '');
+    $('over').hidden = false; $('hud').hidden = true; $('hint').hidden = true;
+    renderBest();
+    setTimeout(() => $('againBtn').focus(), 50);
+  }
+
+  let hintTimer = 0;
+
+  function pauseGame() {
+    if (state !== 'play') return;
+    state = 'paused';
+    keys.clear(); drag = null;
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    $('pause').hidden = false;
+    $('hint').classList.remove('dim');
+    music(false);
+    setTimeout(() => $('resumeBtn').focus(), 30);
+  }
+  function resumeGame() {
+    if (state !== 'paused') return;
+    state = 'play';
+    $('pause').hidden = true;
+    $('resumeBtn').blur();
+    music(true);
+    clearTimeout(hintTimer); hintTimer = setTimeout(() => $('hint').classList.add('dim'), 3000);
+  }
+  function toMenu() {
+    state = 'menu'; attack = null;
+    $('over').hidden = true; $('pause').hidden = true; $('hud').hidden = true; $('hint').hidden = true;
+    $('start').hidden = false;
+    renderRoster();
+  }
+
+  $('startBtn').addEventListener('click', startGame);
+  $('againBtn').addEventListener('click', startGame);
+  $('changeBtn').addEventListener('click', toMenu);
+  $('pauseBtn').addEventListener('click', (e) => { e.currentTarget.blur(); pauseGame(); });
+  $('resumeBtn').addEventListener('click', resumeGame);
+  $('restartBtn').addEventListener('click', startGame);
+  $('pauseChangeBtn').addEventListener('click', toMenu);
+
+  // ---------- Update ----------
+  let gdt = 0, mouthBlurt = 0;
+
+  function update(dt) {
+    time += dt;
+    gdt = state === 'play' ? dt : state === 'dying' ? dt * 0.3 : 0;
+
+    if (state === 'play') {
+      gt += gdt;
+      let ix = 0, iy = 0;
+      if (keys.has('arrowleft') || keys.has('KeyA')) ix--;
+      if (keys.has('arrowright') || keys.has('KeyD')) ix++;
+      if (keys.has('arrowup') || keys.has('KeyW')) iy--;
+      if (keys.has('arrowdown') || keys.has('KeyS')) iy++;
+      const len = Math.hypot(ix, iy) || 1;
+      const px = player.x, py = player.y;
+      player.x += (ix / len) * speed * gdt;
+      player.y += (iy / len) * speed * gdt;
+      clampPlayer();
+      // Smoothed velocity (keyboard or drag) used for aim leading.
+      const k = Math.min(1, gdt * 8);
+      player.vx = lerp(player.vx, (player.x - px) / Math.max(gdt, 1e-4), k);
+      player.vy = lerp(player.vy, (player.y - py) / Math.max(gdt, 1e-4), k);
+      player.inv = Math.max(0, player.inv - gdt);
+      $('time').textContent = gt.toFixed(1);
+      $('score').textContent = dodges;
+    }
+    if (state === 'play' || state === 'dying') updateAttack();
+    if (state === 'dying') { dyingT -= dt; if (dyingT <= 0) { attack = null; gameOver(); } }
+
+    mouthBlurt = Math.max(0, mouthBlurt - dt);
+    shake = Math.max(0, shake - dt * 60);
+    redFlash = Math.max(0, redFlash - dt * 2.5);
+    for (const p of particles) {
+      p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt;
+      const drag = p.kind === 'dust' ? 2.5 : 4;
+      p.vx *= Math.exp(-drag * dt); p.vy *= Math.exp(-drag * dt);
+      if (p.kind === 'spark') p.vy += 300 * U * dt;
+    }
+    particles = particles.filter((p) => p.life > 0);
+    for (const f of floaters) { f.life -= dt; f.y -= 40 * dt; }
+    floaters = floaters.filter((f) => f.life > 0);
+  }
+
+  // ---------- Boss pose ----------
+  // How wide the Pac-Man mouth is (0..1). Chomps during the telegraph, gapes at the crack.
+  function mouthOpen() {
+    if (mouthBlurt > 0) return Math.abs(Math.sin(time * 18)) * 0.9;
+    if (!attack) return 0;
+    const first = attack.lashes.reduce((m, l) => Math.min(m, l.strikeAt), Infinity);
+    if (gt < first) return 0.25 + 0.75 * Math.abs(Math.sin((gt - attack.start) * 16));
+    if (gt < attack.endAt - RECOVER * 0.5) return 1;
+    return clamp((attack.endAt - gt) / (RECOVER * 0.5), 0, 1);
+  }
+
+  const idleAngle = () => Math.PI / 2 - 0.55 + Math.sin(time * 1.7) * 0.15;
+  const backOf = (ang) => ang + Math.PI * 0.92;
+
+  function whipPose() {
+    const r = boss.r, idleLen = r * 2.4, L = lashLen();
+    const idle = { ang: idleAngle(), len: idleLen, amp: r * 0.2, phase: time * 4 };
+    if (!attack) return idle;
+    const ls = attack.lashes;
+    for (let i = 0; i < ls.length; i++) {
+      const l = ls[i];
+      if (gt >= l.strikeAt && gt < l.strikeAt + STRIKE) {
+        const s = (gt - l.strikeAt) / STRIKE;
+        return { ang: lerpAngle(backOf(l.ang), l.ang, easeOut(s)), len: lerp(idleLen * 1.3, L, s * s), amp: lerp(r * 0.6, 2, s), phase: s * 14 };
+      }
+    }
+    const next = ls.find((l) => !l.started);
+    const prev = [...ls].reverse().find((l) => l.struck);
+    if (next) {
+      // Twirl overhead during the telegraph, then snap back for the next lash.
+      const from = prev ? prev.ang : idle.ang;
+      const t0 = prev ? prev.strikeAt + STRIKE : attack.start;
+      const w = clamp((gt - t0) / Math.max(0.05, (next.strikeAt - t0) * (prev ? 1 : 0.5)), 0, 1);
+      const twirl = prev ? 0 : Math.sin(time * 12) * 0.5 * w;
+      return { ang: lerpAngle(from, backOf(next.ang), easeOut(w)) + twirl, len: idleLen * 1.3, amp: r * 0.5, phase: time * 16 };
+    }
+    const q = clamp((gt - (prev.strikeAt + STRIKE)) / RECOVER, 0, 1);
+    return { ang: lerpAngle(prev.ang, idle.ang, easeOut(q) * 0.6), len: lerp(L, idleLen, easeOut(q)), amp: lerp(2, r * 0.2, q), phase: time * 4 };
+  }
+
+  // ---------- Draw ----------
+  function drawBackground() {
+    ctx.fillStyle = '#080b16';
+    ctx.fillRect(0, 0, W, H);
+    const { x: ax, y: ay, w: aw, h: ah } = arena;
+    ctx.fillStyle = '#121830';
+    ctx.fillRect(ax, ay, aw, ah);
+    // Office carpet tiles.
+    const s = 44 * Math.max(0.8, U);
+    ctx.strokeStyle = 'rgba(120,140,200,0.07)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = ax + (aw / 2) % s; x < ax + aw; x += s) { ctx.moveTo(x, ay); ctx.lineTo(x, ay + ah); }
+    for (let y = ay + s; y < ay + ah; y += s) { ctx.moveTo(ax, y); ctx.lineTo(ax + aw, y); }
+    ctx.stroke();
+    const g = ctx.createRadialGradient(W / 2, ay + ah * 0.45, Math.min(aw, ah) * 0.2, W / 2, ay + ah * 0.5, Math.max(aw, ah) * 0.75);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(0,0,0,0.5)');
+    ctx.fillStyle = g;
+    ctx.fillRect(ax, ay, aw, ah);
+    ctx.strokeStyle = 'rgba(255,181,71,0.55)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(ax + 1.5, ay + 1.5, aw - 3, ah - 3);
+  }
+
+  function drawZones() {
+    if (!attack) return;
+    const L = lashLen();
+    for (const l of attack.lashes) {
+      if (l.struck && l.flash <= 0) continue;
+      const o = lashOrigin(l.ang);
+      const ex = o.x + Math.cos(l.ang) * L, ey = o.y + Math.sin(l.ang) * L;
+      ctx.lineCap = 'round';
+      if (l.struck) {
+        ctx.strokeStyle = `rgba(255,240,220,${0.55 * l.flash})`;
+        ctx.lineWidth = zoneW * (1 + (1 - l.flash) * 0.6);
+      } else {
+        const p = clamp((gt - attack.start) / (l.strikeAt - attack.start), 0, 1);
+        const pulse = 0.5 + 0.5 * Math.sin(time * (10 + p * 20));
+        // Brighter once the lane is locked: that is the cue to move.
+        ctx.strokeStyle = l.locked ? `rgba(255,60,40,${0.38 + pulse * 0.15})` : `rgba(255,70,60,${0.1 + p * 0.14 + pulse * 0.06})`;
+        ctx.lineWidth = zoneW;
+      }
+      ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(ex, ey); ctx.stroke();
+      if (!l.struck) {
+        // Dashed edges make the danger lane readable on any background.
+        const nx = -Math.sin(l.ang) * zoneW / 2, ny = Math.cos(l.ang) * zoneW / 2;
+        ctx.setLineDash([10, 8]); ctx.lineDashOffset = -time * 40;
+        ctx.strokeStyle = l.locked ? 'rgba(255,200,170,0.95)' : 'rgba(255,110,90,0.6)'; ctx.lineWidth = l.locked ? 3 : 2;
+        ctx.beginPath();
+        ctx.moveTo(o.x + nx, o.y + ny); ctx.lineTo(ex + nx, ey + ny);
+        ctx.moveTo(o.x - nx, o.y - ny); ctx.lineTo(ex - nx, ey - ny);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+  }
+
+  function drawWhip() {
+    const f = fist(), p = whipPose(), r = boss.r;
+    const dx = Math.cos(p.ang), dy = Math.sin(p.ang), nx = -dy, ny = dx;
+    const hl = handleLen();
+    const ox = f.x + dx * hl, oy = f.y + dy * hl;
+    const n = 30, pts = [];
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1);
+      const off = p.amp * Math.sin(t * 7 - p.phase) * t;
+      pts.push([ox + dx * p.len * t + nx * off, oy + dy * p.len * t + ny * off]);
+    }
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const w0 = r * 0.13, w1 = Math.max(1.5, r * 0.03);
+    for (let i = 0; i < n - 1; i++) {
+      const t = i / (n - 1);
+      ctx.strokeStyle = i % 2 ? '#4a2a14' : '#5d3519';
+      ctx.lineWidth = lerp(w0, w1, t);
+      ctx.beginPath(); ctx.moveTo(pts[i][0], pts[i][1]); ctx.lineTo(pts[i + 1][0], pts[i + 1][1]); ctx.stroke();
+    }
+    // Popper at the tip.
+    const tip = pts[n - 1], pre = pts[n - 2];
+    const ta = Math.atan2(tip[1] - pre[1], tip[0] - pre[0]);
+    ctx.strokeStyle = '#e8d9b5'; ctx.lineWidth = Math.max(1.2, r * 0.025);
+    ctx.beginPath(); ctx.moveTo(tip[0], tip[1]);
+    ctx.lineTo(tip[0] + Math.cos(ta + 0.3) * r * 0.25, tip[1] + Math.sin(ta + 0.3) * r * 0.25); ctx.stroke();
+
+    // Handle.
+    ctx.strokeStyle = '#2b170a'; ctx.lineWidth = r * 0.2;
+    ctx.beginPath(); ctx.moveTo(f.x - dx * r * 0.1, f.y - dy * r * 0.1); ctx.lineTo(ox, oy); ctx.stroke();
+    ctx.strokeStyle = '#b8873f'; ctx.lineWidth = r * 0.2;
+    ctx.setLineDash([r * 0.05, r * 0.09]);
+    ctx.beginPath(); ctx.moveTo(f.x + dx * r * 0.15, f.y + dy * r * 0.15); ctx.lineTo(ox, oy); ctx.stroke();
+    ctx.setLineDash([]);
+    // Fist.
+    ctx.fillStyle = '#f0bf95'; ctx.strokeStyle = '#a56b45'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(f.x, f.y, r * 0.2, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+
+  function drawHat(cx, cy, r, tilt) {
+    ctx.save();
+    ctx.translate(cx + r * 0.05, cy - r * 0.8);
+    ctx.rotate(tilt);
+    // Crown with the classic dented top.
+    ctx.fillStyle = '#9a6332';
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.62, 0);
+    ctx.bezierCurveTo(-r * 0.66, -r * 0.4, -r * 0.6, -r * 0.78, -r * 0.4, -r * 0.8);
+    ctx.quadraticCurveTo(-r * 0.15, -r * 0.82, 0, -r * 0.62);
+    ctx.quadraticCurveTo(r * 0.15, -r * 0.82, r * 0.4, -r * 0.8);
+    ctx.bezierCurveTo(r * 0.6, -r * 0.78, r * 0.66, -r * 0.4, r * 0.62, 0);
+    ctx.closePath(); ctx.fill();
+    // Crown shading.
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.beginPath();
+    ctx.moveTo(r * 0.1, -r * 0.7); ctx.quadraticCurveTo(r * 0.15, -r * 0.82, r * 0.4, -r * 0.8);
+    ctx.bezierCurveTo(r * 0.6, -r * 0.78, r * 0.66, -r * 0.4, r * 0.62, 0);
+    ctx.lineTo(r * 0.3, 0); ctx.closePath(); ctx.fill();
+    // Band.
+    ctx.fillStyle = '#3a210d';
+    ctx.fillRect(-r * 0.63, -r * 0.2, r * 1.26, r * 0.14);
+    ctx.fillStyle = '#ffb547';
+    ctx.fillRect(-r * 0.4, -r * 0.19, r * 0.1, r * 0.12);
+    // Brim curling up at both sides.
+    ctx.fillStyle = '#80501f';
+    ctx.beginPath();
+    ctx.moveTo(-r * 1.35, -r * 0.3);
+    ctx.quadraticCurveTo(-r * 1.0, r * 0.16, 0, r * 0.14);
+    ctx.quadraticCurveTo(r * 1.0, r * 0.16, r * 1.35, -r * 0.3);
+    ctx.quadraticCurveTo(r * 0.95, -r * 0.04, 0, -r * 0.04);
+    ctx.quadraticCurveTo(-r * 0.95, -r * 0.04, -r * 1.35, -r * 0.3);
+    ctx.fill();
+    ctx.strokeStyle = '#5a3412'; ctx.lineWidth = Math.max(1.5, r * 0.03);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawBoss() {
+    const r = boss.r;
+    const angry = attack ? 1 : 0;
+    const jit = angry ? r * 0.025 : 0;
+    const cx = boss.x + rand(-jit, jit), cy = boss.y + Math.sin(time * 2.2) * r * 0.04 + rand(-jit, jit);
+    const open = mouthOpen();
+    const m = open * 0.75; // half-angle of the mouth wedge
+    const dir = Math.atan2(player.y - cy, player.x - cx);
+
+    // Shadow.
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.ellipse(cx, cy + r * 1.12, r * 0.85, r * 0.16, 0, 0, Math.PI * 2); ctx.fill();
+
+    if (m > 0.02) {
+      // Mouth interior with teeth along both edges.
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0, '#1a0000'); g.addColorStop(1, '#7a0f12');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, r, dir - m, dir + m); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#ff6f8a';
+      ctx.beginPath(); ctx.ellipse(cx + Math.cos(dir) * r * 0.7, cy + Math.sin(dir) * r * 0.7, r * 0.22, r * 0.12 * open + 1, dir + Math.PI / 2, 0, Math.PI * 2); ctx.fill();
+    }
+
+    ctx.save();
+    ctx.beginPath();
+    if (m > 0.02) { ctx.moveTo(cx, cy); ctx.arc(cx, cy, r, dir + m, dir - m + Math.PI * 2); ctx.closePath(); }
+    else ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.clip();
+    if (imgOk) ctx.drawImage(img, SRC.x - SRC.r, SRC.y - SRC.r, SRC.r * 2, SRC.r * 2, cx - r, cy - r, r * 2, r * 2);
+    else { ctx.fillStyle = '#e9a86a'; ctx.fillRect(cx - r, cy - r, r * 2, r * 2); }
+    if (angry) {
+      ctx.fillStyle = `rgba(255,30,20,${0.12 + 0.12 * Math.sin(time * 20)})`;
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    }
+    ctx.restore();
+
+    if (m > 0.02) {
+      ctx.fillStyle = '#fff';
+      for (const side of [-1, 1]) {
+        const a = dir + side * m;
+        for (let i = 0; i < 3; i++) {
+          const t = 0.45 + i * 0.18;
+          const bx = cx + Math.cos(a) * r * t, by = cy + Math.sin(a) * r * t;
+          const ia = a - side * Math.PI / 2; // tooth points into the mouth
+          ctx.beginPath();
+          ctx.moveTo(bx + Math.cos(a) * r * 0.07, by + Math.sin(a) * r * 0.07);
+          ctx.lineTo(bx - Math.cos(a) * r * 0.07, by - Math.sin(a) * r * 0.07);
+          ctx.lineTo(bx + Math.cos(ia) * r * 0.12, by + Math.sin(ia) * r * 0.12);
+          ctx.fill();
+        }
+      }
+    }
+
+    // Rim.
+    ctx.strokeStyle = angry ? '#ff5a4f' : '#ffb547';
+    ctx.lineWidth = Math.max(3, r * 0.07);
+    ctx.beginPath();
+    if (m > 0.02) { ctx.arc(cx, cy, r, dir + m, dir - m + Math.PI * 2); }
+    else ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+
+    drawHat(cx, cy, r, -0.16 + Math.sin(time * 2.2) * 0.03 - open * 0.08);
+    ctx.font = `${clamp(r * 0.3, 12, 18)}px "Russo One", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.lineWidth = 4; ctx.strokeStyle = '#0d1120';
+    ctx.strokeText('АНДРЕЙ', cx, cy + r * 1.12); ctx.fillStyle = angry ? '#ff8a80' : '#ffb547';
+    ctx.fillText('АНДРЕЙ', cx, cy + r * 1.12);
+  }
+
+  function drawBubble() {
+    const show = mouthBlurt > 0 || (attack && gt < attack.endAt - RECOVER);
+    if (!show) return;
+    const age = attack ? gt - attack.start : 0.7 - mouthBlurt;
+    const pop = age < 0.15 ? easeOut(age / 0.15) * 1.15 : 1 + Math.sin(time * 30) * 0.03;
+    const fs = clamp(boss.r * 0.42, 16, 30);
+    ctx.save();
+    ctx.font = `${fs}px "Russo One", "Arial Black", sans-serif`;
+    const text = 'РАБОТАТЬ!!!';
+    const tw = ctx.measureText(text).width;
+    const bw = tw + fs * 1.1, bh = fs * 1.7;
+    // Bubble sits left of the boss; on narrow screens it goes below-left.
+    let bx = boss.x - boss.r * 1.35 - bw / 2, by = boss.y - boss.r * 0.4;
+    if (bx - bw / 2 < 8) { bx = Math.max(bw / 2 + 8, boss.x - boss.r * 0.9); by = boss.y + boss.r * 1.75; }
+    ctx.translate(bx, by);
+    ctx.rotate(-0.06 + rand(-0.02, 0.02));
+    ctx.scale(pop, pop);
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1b1b1b'; ctx.lineWidth = 3;
+    roundRect(-bw / 2, -bh / 2, bw, bh, bh * 0.35);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#e3261b';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, rand(-1, 1), fs * 0.04 + rand(-1, 1));
+    ctx.restore();
+  }
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+
+  function inDanger() {
+    if (!attack) return false;
+    const L = lashLen();
+    return attack.lashes.some((l) => {
+      if (l.struck) return false;
+      const o = lashOrigin(l.ang);
+      return distToSeg(player.x, player.y, o.x, o.y, o.x + Math.cos(l.ang) * L, o.y + Math.sin(l.ang) * L) < zoneW / 2 + player.r;
+    });
+  }
+
+  function drawPlayer() {
+    if (state === 'menu' || state === 'over') return;
+    if (player.inv > 0 && Math.floor(time * 16) % 2 === 0) return;
+    const { x, y, r } = player;
+    const danger = state === 'play' && inDanger();
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.ellipse(x, y + r * 1.05, r * 0.85, r * 0.25, 0, 0, Math.PI * 2); ctx.fill();
+    // The chosen colleague's avatar, cropped to a circle.
+    ctx.save();
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip();
+    const im = me && me.img;
+    if (im && im.complete && im.naturalWidth) {
+      const s = Math.min(im.naturalWidth, im.naturalHeight) / (me.zoom || 1);
+      ctx.drawImage(im, (im.naturalWidth - s) / 2, (im.naturalHeight - s) / 2, s, s, x - r, y - r, r * 2, r * 2);
+    } else {
+      ctx.fillStyle = '#6fd3ff'; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    if (state === 'dying') { ctx.fillStyle = 'rgba(40,50,70,0.55)'; ctx.fillRect(x - r, y - r, r * 2, r * 2); }
+    ctx.restore();
+    ctx.strokeStyle = danger ? '#ff5a4f' : '#6fd3ff'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+    if (me) {
+      ctx.font = `800 ${clamp(r * 0.6, 11, 14)}px Manrope, system-ui, sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.lineWidth = 3; ctx.strokeStyle = '#0d1120';
+      ctx.strokeText(me.name, x, y + r + 5); ctx.fillStyle = '#eef0f8'; ctx.fillText(me.name, x, y + r + 5);
+    }
+    if (danger) {
+      ctx.fillStyle = '#ffd23f';
+      ctx.font = `${r * 1.2}px "Russo One", sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText('!', x + r * 0.9, y - r * 0.6 + Math.sin(time * 25) * 2);
+      ctx.fillStyle = '#9fe0ff';
+      ctx.beginPath(); ctx.ellipse(x - r * 0.95, y - r * 0.35, r * 0.12, r * 0.2, 0.3, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  function drawParticles() {
+    for (const p of particles) {
+      const a = clamp(p.life / p.max, 0, 1);
+      ctx.globalAlpha = p.kind === 'dust' ? a * 0.5 : a;
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (p.kind === 'dust' ? 2 - a : 1), 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    for (const f of floaters) {
+      ctx.globalAlpha = clamp(f.life / 0.5, 0, 1);
+      ctx.font = `${clamp(16 * U, 14, 22)}px "Russo One", sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 4; ctx.strokeStyle = '#0d1120';
+      ctx.strokeText(f.text, f.x, f.y); ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, f.y);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function draw() {
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    drawBackground();
+    ctx.save();
+    if (shake > 0) ctx.translate(rand(-shake, shake) * 0.6, rand(-shake, shake) * 0.6);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(arena.x, arena.y, arena.w, arena.h); ctx.clip();
+    drawZones();
+    ctx.restore();
+    drawPlayer();
+    drawWhip();
+    drawBoss();
+    drawParticles();
+    drawBubble();
+    ctx.restore();
+    if (redFlash > 0) {
+      ctx.fillStyle = `rgba(255,40,30,${redFlash * 0.28})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (state !== 'paused') update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  addEventListener('resize', layout);
+  layout();
+  renderBest();
+  player.x = W / 2; player.y = arena.y + arena.h * 0.78;
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
