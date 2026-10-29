@@ -667,7 +667,10 @@
   }
 
   // ---------- Game state ----------
-  let state = 'menu';     // menu | play | paused | dying | over
+  let state = 'menu';     // menu | countdown | play | paused | dying | over
+  // 3-2-1 before every round, then "РАБОТАТЬ!" (Andrey shouts it) for GO_TIME before attacks start.
+  const COUNT_FROM = 3, GO_TIME = 0.7;
+  let countT = 0, lastCount = -1;
   let time = 0;           // real time, drives idle animation
   let gt = 0;             // game time since start
   let lives = 3, dodges = 0;
@@ -997,16 +1000,25 @@
     particles = []; floaters = [];
     player.x = W / 2; player.y = arena.y + arena.h * 0.78; player.vx = player.vy = 0; player.inv = 0;
     clampPlayer();
-    state = 'play';
+    state = 'countdown'; countT = COUNT_FROM + GO_TIME; lastCount = -1;
+    $('time').textContent = '0.0'; $('score').textContent = '0';
     $('start').hidden = true; $('howto').hidden = true; $('over').hidden = true; $('pause').hidden = true; $('hud').hidden = false;
     const hint = $('hint');
     hint.hidden = false; hint.classList.remove('dim');
     clearTimeout(hintTimer); hintTimer = setTimeout(() => hint.classList.add('dim'), 6000);
     renderLives();
     lastShout = -9;
-    shout(); // speaking inside the click also unlocks speech on iOS
-    music(true);
-    mouthBlurt = 0.7;
+    music(true); // must start inside the click/key handler, or mobile browsers block it
+  }
+  function updateCountdown(dt) {
+    countT -= dt;
+    const n = Math.ceil(countT - GO_TIME); // 3, 2, 1, then 0 = "РАБОТАТЬ!"
+    if (n !== lastCount && n >= 0) {
+      lastCount = n;
+      if (n > 0) tone('square', 520, 520, 0.12, 0.1);
+      else { tone('square', 880, 880, 0.25, 0.12); shout(); mouthBlurt = 0.7; }
+    }
+    if (countT <= 0) state = 'play';
   }
 
   function gameOver() {
@@ -1080,6 +1092,7 @@
     time += dt;
     gdt = state === 'play' ? dt : state === 'dying' ? dt * 0.3 : 0;
 
+    if (state === 'countdown') updateCountdown(dt);
     if (state === 'play') {
       gt += gdt;
       let ix = 0, iy = 0;
@@ -1441,6 +1454,29 @@
     }
   }
 
+  function drawCountdown() {
+    if (state !== 'countdown') return;
+    const left = countT - GO_TIME, n = Math.ceil(left);
+    const frac = n > 0 ? left - (n - 1) : countT / GO_TIME; // 1 → 0 within each step
+    const text = n > 0 ? String(n) : 'РАБОТАТЬ!';
+    const m = Math.min(arena.w, arena.h);
+    const size = n > 0 ? m * 0.32 : Math.min(m * 0.14, (arena.w * 0.9) / 6);
+    const scale = 1 + 0.45 * Math.pow(frac, 3);
+    ctx.save();
+    ctx.translate(W / 2, arena.y + arena.h * 0.56);
+    ctx.scale(scale, scale);
+    ctx.globalAlpha = Math.min(1, 0.25 + frac * 2.5);
+    ctx.font = `${size}px "Russo One", "Arial Black", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = size * 0.12; ctx.strokeStyle = '#0d1120';
+    ctx.strokeText(text, 0, 0);
+    ctx.shadowColor = n > 0 ? 'rgba(255,181,71,0.6)' : 'rgba(255,90,79,0.7)'; ctx.shadowBlur = size * 0.25;
+    ctx.fillStyle = n > 0 ? '#ffb547' : '#ff5a4f';
+    ctx.fillText(text, 0, 0);
+    ctx.restore();
+  }
+
   function drawJoystick() {
     if (joy.id === null || state !== 'play') return;
     const R = joyR();
@@ -1486,6 +1522,7 @@
     drawParticles();
     drawBubble();
     drawJoystick();
+    drawCountdown();
     ctx.restore();
     if (redFlash > 0) {
       ctx.fillStyle = `rgba(255,40,30,${redFlash * 0.28})`;
