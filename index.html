@@ -477,9 +477,14 @@
   addEventListener('blur', () => { keys.clear(); if (state === 'play') pauseGame(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') pauseGame(); });
 
-  // Relative drag: the finger never covers the player.
+  // Relative drag for touch screens only: the finger never covers the player. A mouse can't move
+  // the player at all, on desktop it's keyboard only.
   let drag = null;
-  cv.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, id: e.pointerId }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse') return;
+    drag = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    cv.setPointerCapture(e.pointerId);
+  });
   cv.addEventListener('pointermove', (e) => {
     if (!drag || e.pointerId !== drag.id || state !== 'play') return;
     player.x += (e.clientX - drag.x) * 1.4;
