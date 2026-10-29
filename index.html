@@ -159,7 +159,7 @@
 
 <div class="hint" id="hint" hidden>
   <span class="kb"><kbd>←</kbd><kbd>↑</kbd><kbd>→</kbd><kbd>↓</kbd> / <kbd>WASD</kbd> бегать · <kbd>Пробел</kbd> пауза</span>
-  <span class="touch">Води пальцем по экрану · ⏸ пауза</span>
+  <span class="touch">Зажми палец и тяни — джойстик · ⏸ пауза</span>
 </div>
 
 <div class="screen" id="pause" hidden>
@@ -185,7 +185,7 @@
     <ul class="keys compact">
       <li><kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd> или <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> — бегать</li>
       <li><kbd>Пробел</kbd> — пауза · <kbd>M</kbd> — звук</li>
-      <li>На телефоне води пальцем, пауза — кнопка ⏸</li>
+      <li>На телефоне зажми палец где угодно и тяни в сторону — это джойстик. Пауза — кнопка ⏸</li>
     </ul>
     <button class="btn" id="startBtn" disabled>Выбери игрока</button>
     <p class="fine">Со звуком веселее</p>
@@ -334,11 +334,36 @@
     speechSynthesis.addEventListener?.('voiceschanged', pickVoice);
   }
 
+  // iOS: Web Audio obeys the ring/silent switch unless the page asks for playback. Safari 16.4+
+  // has navigator.audioSession for that; older versions only switch while an <audio> element plays,
+  // so a silent looping one is started inside the tap.
+  let silentEl = null;
+  function silentWavUrl() {
+    const n = 4000, b = new DataView(new ArrayBuffer(44 + n));
+    const w = (o, str) => { for (let i = 0; i < str.length; i++) b.setUint8(o + i, str.charCodeAt(i)); };
+    w(0, 'RIFF'); b.setUint32(4, 36 + n, true); w(8, 'WAVE'); w(12, 'fmt ');
+    b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true);
+    b.setUint32(24, 8000, true); b.setUint32(28, 8000, true); b.setUint16(32, 1, true); b.setUint16(34, 8, true);
+    w(36, 'data'); b.setUint32(40, n, true);
+    for (let i = 0; i < n; i++) b.setUint8(44 + i, 128);
+    return URL.createObjectURL(new Blob([b.buffer], { type: 'audio/wav' }));
+  }
+  function unlockIOSAudio() {
+    try { if (navigator.audioSession) { navigator.audioSession.type = 'playback'; return; } } catch (e) {}
+    if (silentEl) return;
+    silentEl = new Audio(silentWavUrl());
+    silentEl.loop = true;
+    silentEl.setAttribute('playsinline', '');
+    silentEl.play().catch(() => {});
+  }
+
   function initAudio() {
+    unlockIOSAudio();
     if (actx) { actx.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     actx = new AC();
+    actx.resume();
     master = actx.createGain();
     master.gain.value = muted ? 0 : MASTER_VOLUME;
     master.connect(actx.destination);
@@ -477,24 +502,32 @@
   addEventListener('blur', () => { keys.clear(); if (state === 'play') pauseGame(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') pauseGame(); });
 
-  // Relative drag for touch screens only: the finger never covers the player. A mouse can't move
-  // the player at all, on desktop it's keyboard only.
-  let drag = null;
+  // Floating joystick for touch: its centre is where the finger lands, the finger's offset sets
+  // direction and speed, capped at the keyboard speed so phones are no easier than keys.
+  // A mouse can't move the player at all, on desktop it's keyboard only.
+  const joy = { id: null, ox: 0, oy: 0, x: 0, y: 0 };
+  const joyR = () => clamp(Math.min(W, H) * 0.12, 40, 64);
   cv.addEventListener('pointerdown', (e) => {
-    if (e.pointerType === 'mouse') return;
-    drag = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    if (e.pointerType === 'mouse' || joy.id !== null) return;
+    joy.id = e.pointerId;
+    joy.ox = joy.x = e.clientX; joy.oy = joy.y = e.clientY;
     cv.setPointerCapture(e.pointerId);
   });
   cv.addEventListener('pointermove', (e) => {
-    if (!drag || e.pointerId !== drag.id || state !== 'play') return;
-    player.x += (e.clientX - drag.x) * 1.4;
-    player.y += (e.clientY - drag.y) * 1.4;
-    drag.x = e.clientX; drag.y = e.clientY;
-    clampPlayer();
+    if (e.pointerId !== joy.id) return;
+    joy.x = e.clientX; joy.y = e.clientY;
   });
-  const endDrag = () => { drag = null; };
-  cv.addEventListener('pointerup', endDrag);
-  cv.addEventListener('pointercancel', endDrag);
+  const endJoy = (e) => { if (e.pointerId === joy.id) joy.id = null; };
+  cv.addEventListener('pointerup', endJoy);
+  cv.addEventListener('pointercancel', endJoy);
+  // Unit-length-or-less direction, or null when no finger is down.
+  function joyVector() {
+    if (joy.id === null) return null;
+    const dx = joy.x - joy.ox, dy = joy.y - joy.oy, d = Math.hypot(dx, dy), R = joyR();
+    if (d < R * 0.15) return [0, 0];
+    const m = Math.min(1, d / R);
+    return [(dx / d) * m, (dy / d) * m];
+  }
 
   function clampPlayer() {
     const r = player.r;
@@ -705,7 +738,7 @@
   function pauseGame() {
     if (state !== 'play') return;
     state = 'paused';
-    keys.clear(); drag = null;
+    keys.clear(); joy.id = null;
     if ('speechSynthesis' in window) speechSynthesis.cancel();
     $('pause').hidden = false;
     $('hint').classList.remove('dim');
@@ -717,6 +750,7 @@
     state = 'play';
     $('pause').hidden = true;
     $('resumeBtn').blur();
+    if (actx) actx.resume();
     music(true);
     clearTimeout(hintTimer); hintTimer = setTimeout(() => $('hint').classList.add('dim'), 3000);
   }
@@ -750,11 +784,14 @@
       if (keys.has('arrowup') || keys.has('KeyW')) iy--;
       if (keys.has('arrowdown') || keys.has('KeyS')) iy++;
       const len = Math.hypot(ix, iy) || 1;
+      let mx = ix / len, my = iy / len;
+      const jv = joyVector();
+      if (jv) [mx, my] = jv;
       const px = player.x, py = player.y;
-      player.x += (ix / len) * speed * gdt;
-      player.y += (iy / len) * speed * gdt;
+      player.x += mx * speed * gdt;
+      player.y += my * speed * gdt;
       clampPlayer();
-      // Smoothed velocity (keyboard or drag) used for aim leading.
+      // Smoothed velocity (keyboard or joystick) used for aim leading.
       const k = Math.min(1, gdt * 8);
       player.vx = lerp(player.vx, (player.x - px) / Math.max(gdt, 1e-4), k);
       player.vy = lerp(player.vy, (player.y - py) / Math.max(gdt, 1e-4), k);
@@ -1100,6 +1137,18 @@
     }
   }
 
+  function drawJoystick() {
+    if (joy.id === null || state !== 'play') return;
+    const R = joyR();
+    let dx = joy.x - joy.ox, dy = joy.y - joy.oy;
+    const d = Math.hypot(dx, dy);
+    if (d > R) { dx = (dx / d) * R; dy = (dy / d) * R; }
+    ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(joy.ox, joy.oy, R, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,181,71,0.45)';
+    ctx.beginPath(); ctx.arc(joy.ox + dx, joy.oy + dy, R * 0.42, 0, Math.PI * 2); ctx.fill();
+  }
+
   function drawParticles() {
     for (const p of particles) {
       const a = clamp(p.life / p.max, 0, 1);
@@ -1132,6 +1181,7 @@
     drawBoss();
     drawParticles();
     drawBubble();
+    drawJoystick();
     ctx.restore();
     if (redFlash > 0) {
       ctx.fillStyle = `rgba(255,40,30,${redFlash * 0.28})`;
